@@ -97,6 +97,10 @@
 
 #define LANTIQ_CONTEXT_PREFIX "lantiq"
 #define DEFAULT_INTERDIGIT_TIMEOUT 4000
+#define DEFAULT_DIGITLOW_MIN 30
+#define DEFAULT_DIGITLOW_MAX 80
+#define DEFAULT_DIGITHIGH_MIN 30
+#define DEFAULT_DIGITHIGH_MAX 80
 #define DEFAULT_NUMSIGN_COMPLETE 0 /* 1=# key ends dialing */
 #define G723_HIGH_RATE	1
 #define LED_NAME_LENGTH 32
@@ -1943,6 +1947,30 @@ static int load_module(void)
 				txgain = 0;
 				ast_log(LOG_WARNING, "Invalid txgain: %s, using default.\n", v->value);
 			}
+		} else if (!strcasecmp(v->name, "digitlowmin")) {
+			digitlowmin = atoi(v->value);
+			if (!digitlowmin) {
+				digitlowmin = DEFAULT_DIGITLOW_MIN;
+				ast_log(LOG_WARNING, "Invalid digitlowmin: %s, using default.\n", v->value);
+			}
+		} else if (!strcasecmp(v->name, "digitlowmax")) {
+			digitlowmax = atoi(v->value);
+			if (!digitlowmax) {
+				digitlowmax = DEFAULT_DIGITLOW_MAX;
+				ast_log(LOG_WARNING, "Invalid digitlowmax: %s, using default.\n", v->value);
+			}
+		} else if (!strcasecmp(v->name, "digithighmin")) {
+			digithighmin = atoi(v->value);
+			if (!digithighmin) {
+				digitlowmin = DEFAULT_DIGITHIGH_MIN;
+				ast_log(LOG_WARNING, "Invalid digithighmin: %s, using default.\n", v->value);
+			}
+		} else if (!strcasecmp(v->name, "digithighmax")) {
+			digithighmax = atoi(v->value);
+			if (!digithighmax) {
+				digithighmax = DEFAULT_DIGITHIGH_MAX;
+				ast_log(LOG_WARNING, "Invalid digithighmax: %s, using default.\n", v->value);
+			}
 		} else if (!strcasecmp(v->name, "echocancel")) {
 			if (!strcasecmp(v->value, "off")) {
 				wlec_type = IFX_TAPI_WLEC_TYPE_OFF;
@@ -2112,6 +2140,8 @@ static int load_module(void)
 	IFX_TAPI_WLEC_CFG_t wlec_cfg;
 	IFX_TAPI_JB_CFG_t jb_cfg;
 	IFX_TAPI_CID_CFG_t cid_cfg;
+	IFX_TAPI_LINE_HOOK_VT_t digitlow_time;
+	IFX_TAPI_LINE_HOOK_VT_t digithigh_time;
 
 	/* open device */
 	dev_ctx.dev_fd = lantiq_dev_open(base_path, 0);
@@ -2169,6 +2199,25 @@ static int load_module(void)
 	}
 
 	for (c = 0; c < dev_ctx.channels ; c++) {
+
+		memset(&digitlow_time, 0, sizeof(IFX_TAPI_LINE_HOOK_VT_t));
+		digitlow_time.nType = IFX_TAPI_LINE_HOOK_VT_DIGITLOW_TIME;
+   	digitlow_time.nMinTime = digitlowmin;
+   	digitlow_time.nMaxTime = digitlowmax;
+		if (ioctl(dev_ctx.ch_fd[c], IFX_TAPI_LINE_HOOK_VT_SET, (unsigned long)&digitlow_time) != IFX_SUCCESS) {
+			ast_log(LOG_ERROR, "DIGITLOW_TIME IFX_TAPI_LINE_HOOK_VT_SET %d failed\n", c);
+			goto load_error_st;
+		}
+
+		memset(&digithigh_time, 0, sizeof(IFX_TAPI_LINE_HOOK_VT_t));
+		digithigh_time.nType = IFX_TAPI_LINE_HOOK_VT_DIGITHIGH_TIME;
+   	digithigh_time.nMinTime = digithighmin;
+   	digithigh_time.nMaxTime = digithighmax;
+		if (ioctl(dev_ctx.ch_fd[c], IFX_TAPI_LINE_HOOK_VT_SET, (unsigned long)&digithigh_time) != IFX_SUCCESS) {
+			ast_log(LOG_ERROR, "DIGITHIGH_TIME IFX_TAPI_LINE_HOOK_VT_SET %d failed\n", c);
+			goto load_error_st;
+		}
+
 		/* We're a FXS and want to switch between narrow & wide band automatically */
 		memset(&line_type, 0, sizeof(IFX_TAPI_LINE_TYPE_CFG_t));
 		line_type.lineType = IFX_TAPI_LINE_TYPE_FXS_AUTO;
